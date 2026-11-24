@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#172027">
+  <title>Modelo 3D | Realidade Aumentada</title>
+  <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <style>
+    :root{--bg:#edf0f1;--card:#fff;--fg:#172027;--muted:#65727a;--line:#d5dcdf;--accent:#d94a1f;--ok:#187447;--bad:#b3261e}
+    *{box-sizing:border-box}
+    body{margin:0;padding:24px 16px 44px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,Arial,sans-serif}
+    main{max-width:900px;margin:auto;display:grid;gap:18px}
+    h1{font-size:clamp(25px,5vw,36px);line-height:1.12;margin:0}
+    h2{font-size:19px;margin:0}
+    p{margin:0}.muted,.note{color:var(--muted)}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:13px}
+    model-viewer{display:block;width:100%;height:min(65vh,560px);min-height:300px;background:#e1e6e8;border-radius:8px;--poster-color:transparent}
+    button{border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--fg);padding:11px 15px;font:600 14px system-ui;cursor:pointer}
+    button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    input[type=url]{width:100%;padding:11px;border:1px solid var(--line);border-radius:7px;font:14px system-ui}
+    label{display:grid;gap:6px;color:var(--muted);font-size:13px}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .status{min-height:22px;font-size:14px;color:var(--muted)}
+    .status.ok{color:var(--ok)}.status.bad{color:var(--bad)}
+    .qrrow{display:grid;grid-template-columns:240px 1fr;gap:18px;align-items:center}
+    #qr{background:#fff;padding:10px;width:240px;min-height:240px;display:grid;place-items:center;border:1px solid var(--line);border-radius:8px}
+    #qr canvas{max-width:100%;height:auto}
+    .url{overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;background:#f4f6f6;padding:10px;border-radius:6px}
+    .arbtn{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);white-space:nowrap;background:var(--accent);color:#fff;border:0}
+    .viewer-note{font-size:13px;color:var(--muted)}
+    [hidden]{display:none!important}
+    @media(max-width:620px){body{padding:16px 12px 32px}.card{padding:14px}.qrrow{grid-template-columns:1fr}#qr{width:100%;max-width:260px}.arbtn{font-size:13px;padding:10px 12px}}
+  </style>
+</head>
+<body>
+<main>
+  <header style="display:grid;gap:7px">
+    <h1 id="pageTitle">Visualização 3D e Realidade Aumentada</h1>
+    <p class="muted">Abra o modelo no navegador ou posicione-o no ambiente real usando a câmera do celular.</p>
+  </header>
+
+  <section class="card" id="modelCard">
+    <h2>Modelo 3D</h2>
+    <div style="position:relative">
+      <model-viewer id="model"
+        src="./modelo.glb"
+        alt="Modelo 3D do projeto"
+        ar
+        ar-modes="webxr scene-viewer quick-look"
+        ar-placement="floor"
+        ar-scale="auto"
+        camera-controls
+        touch-action="pan-y"
+        shadow-intensity="1"
+        environment-image="neutral"
+        exposure="1"
+        loading="eager">
+        <button slot="ar-button" class="arbtn" type="button">Ver em realidade aumentada</button>
+      </model-viewer>
+    </div>
+    <div class="status" id="modelStatus" role="status" aria-live="polite">Carregando o arquivo modelo.glb...</div>
+    <p class="viewer-note">No celular, toque em “Ver em realidade aumentada”. No Android, o aparelho poderá abrir o Google Scene Viewer; no iPhone, o Quick Look.</p>
+  </section>
+
+  <section class="card" id="qrCard">
+    <h2>Gerar QR Code para compartilhar</h2>
+    <p class="muted">Depois de publicar esta pasta no GitHub Pages, cole aqui o endereço do site. O QR Code abrirá diretamente a visualização do modelo.</p>
+    <label>Endereço publicado no GitHub Pages
+      <input id="siteUrl" type="url" placeholder="https://seu-usuario.github.io/nome-do-repositorio/">
+    </label>
+    <div class="row">
+      <button class="primary" id="makeQr" type="button">Gerar QR Code</button>
+      <button id="copyUrl" type="button">Copiar endereço de acesso</button>
+    </div>
+    <div class="qrrow" id="qrResult" hidden>
+      <div id="qr" aria-label="QR Code"></div>
+      <div style="display:grid;gap:10px;min-width:0">
+        <strong>QR Code pronto</strong>
+        <div class="url" id="qrUrl"></div>
+        <div class="row">
+          <button id="downloadQr" type="button">Baixar QR Code PNG</button>
+        </div>
+        <p class="note">A câmera do celular abrirá esta página já na visualização do modelo. Depois, basta tocar no botão de realidade aumentada.</p>
+      </div>
+    </div>
+    <div class="status" id="qrStatus" role="status" aria-live="polite"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const model = $("model");
+  const status = $("modelStatus");
+
+  model.addEventListener("load", () => {
+    status.textContent = "Modelo carregado. Você já pode girar e aproximar a visualização.";
+    status.className = "status ok";
+  });
+  model.addEventListener("error", () => {
+    status.textContent = "Não foi possível carregar modelo.glb. Confira se o arquivo está na mesma pasta de index.html e se o nome está correto.";
+    status.className = "status bad";
+  });
+
+  // O parâmetro #ar mantém a mesma página, mas abre diretamente a área do modelo.
+  if (location.hash === "#ar") {
+    $("qrCard").hidden = true;
+    $("pageTitle").textContent = "Modelo em Realidade Aumentada";
+  }
+
+  function makeViewerUrl(raw) {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") throw new Error("Use o endereço HTTPS publicado pelo GitHub Pages.");
+    u.hash = "ar";
+    return u.href;
+  }
+
+  $("makeQr").addEventListener("click", () => {
+    try {
+      const raw = $("siteUrl").value.trim();
+      if (!raw) throw new Error("Cole primeiro o endereço publicado no GitHub Pages.");
+      const finalUrl = makeViewerUrl(raw);
+      $("qr").innerHTML = "";
+      const canvas = document.createElement("canvas");
+      $("qr").appendChild(canvas);
+      new QRious({element:canvas,value:finalUrl,size:440,level:"H"});
+      $("qrUrl").textContent = finalUrl;
+      $("qrResult").hidden = false;
+      $("qrStatus").textContent = "QR Code gerado com sucesso.";
+      $("qrStatus").className = "status ok";
+    } catch (e) {
+      $("qrStatus").textContent = e.message || "Não foi possível gerar o QR Code.";
+      $("qrStatus").className = "status bad";
+    }
+  });
+
+  $("downloadQr").addEventListener("click", () => {
+    const canvas = $("qr").querySelector("canvas");
+    if (!canvas) return;
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = "qr-realidade-aumentada.png";
+    a.click();
+  });
+
+  $("copyUrl").addEventListener("click", async () => {
+    const raw = $("siteUrl").value.trim();
+    if (!raw) {
+      $("qrStatus").textContent = "Cole primeiro o endereço publicado no GitHub Pages.";
+      $("qrStatus").className = "status bad";
+      return;
+    }
+    try {
+      const finalUrl = makeViewerUrl(raw);
+      await navigator.clipboard.writeText(finalUrl);
+      $("qrStatus").textContent = "Endereço de acesso copiado.";
+      $("qrStatus").className = "status ok";
+    } catch (e) {
+      $("qrStatus").textContent = e.message || "Não foi possível copiar o endereço.";
+      $("qrStatus").className = "status bad";
+    }
+  });
+})();
+</script>
+</body>
+</html>
