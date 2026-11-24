@@ -65,10 +65,18 @@
       </model-viewer>
     </div>
     <div class="row">
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg)">Escala
+        <select id="scaleSel" style="padding:10px;border:1px solid var(--line);border-radius:7px;font:600 14px system-ui;background:#fff">
+          <option value="1">1:1 (real)</option>
+          <option value="0.02">1:50</option>
+          <option value="0.01">1:100</option>
+        </select>
+      </label>
       <button id="zoomIn" type="button">Aproximar +</button>
       <button id="zoomOut" type="button">Afastar −</button>
       <button id="zoomReset" type="button">Ver tudo</button>
     </div>
+    <div class="viewer-note" id="sizeInfo"></div>
     <div class="status" id="modelStatus" role="status" aria-live="polite">Carregando o arquivo modelo.glb...</div>
     <p class="viewer-note">No celular, toque em “Ver em realidade aumentada”. No Android, o aparelho poderá abrir o Google Scene Viewer; no iPhone, o Quick Look.</p>
   </section>
@@ -112,6 +120,23 @@
     status.textContent = "Não foi possível carregar modelo.glb. Confira se o arquivo está na mesma pasta de index.html e se o nome está correto.";
     status.className = "status bad";
   });
+
+  const BASE = [20.606, 5.484, 57.713]; // dimensões originais do GLB, em metros
+  const fmt = v => v >= 1 ? v.toFixed(2).replace(".", ",") + " m" : (v * 100).toFixed(1).replace(".", ",") + " cm";
+  function applyScale(f, save) {
+    model.scale = `${f} ${f} ${f}`;
+    const names = {"1":"1:1", "0.02":"1:50", "0.01":"1:100"};
+    $("sizeInfo").textContent = `Escala ${names[String(f)] || f}: ${BASE.map(v => fmt(v * f)).join(" × ")} (X × Y × Z). Vale também para a realidade aumentada.`;
+    if (model.updateFraming) model.updateFraming();
+    if (save) { try { localStorage.setItem("escala", String(f)); } catch (e) {} }
+  }
+  $("scaleSel").addEventListener("change", e => applyScale(parseFloat(e.target.value), true));
+  (() => {
+    let f = 1;
+    try { const v = localStorage.getItem("escala"); if (v && ["1","0.02","0.01"].includes(v)) f = parseFloat(v); } catch (e) {}
+    $("scaleSel").value = String(f);
+    applyScale(f, false);
+  })();
 
   function zoom(f){
     const o = model.getCameraOrbit();
