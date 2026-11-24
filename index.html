@@ -68,6 +68,7 @@
       <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg)">Escala
         <select id="scaleSel" style="padding:10px;border:1px solid var(--line);border-radius:7px;font:600 14px system-ui;background:#fff">
           <option value="1">1:1 (real)</option>
+          <option value="0.5">1:2</option>
           <option value="0.02">1:50</option>
           <option value="0.01">1:100</option>
         </select>
@@ -125,7 +126,7 @@
   const fmt = v => v >= 1 ? v.toFixed(2).replace(".", ",") + " m" : (v * 100).toFixed(1).replace(".", ",") + " cm";
   function applyScale(f, save) {
     model.scale = `${f} ${f} ${f}`;
-    const names = {"1":"1:1", "0.02":"1:50", "0.01":"1:100"};
+    const names = {"1":"1:1", "0.5":"1:2", "0.02":"1:50", "0.01":"1:100"};
     $("sizeInfo").textContent = `Escala ${names[String(f)] || f}: ${BASE.map(v => fmt(v * f)).join(" × ")} (X × Y × Z). Vale também para a realidade aumentada.`;
     if (model.updateFraming) model.updateFraming();
     if (save) { try { localStorage.setItem("escala", String(f)); } catch (e) {} }
@@ -133,7 +134,7 @@
   $("scaleSel").addEventListener("change", e => applyScale(parseFloat(e.target.value), true));
   (() => {
     let f = 1;
-    try { const v = localStorage.getItem("escala"); if (v && ["1","0.02","0.01"].includes(v)) f = parseFloat(v); } catch (e) {}
+    try { const v = localStorage.getItem("escala"); if (v && ["1","0.5","0.02","0.01"].includes(v)) f = parseFloat(v); } catch (e) {}
     $("scaleSel").value = String(f);
     applyScale(f, false);
   })();
