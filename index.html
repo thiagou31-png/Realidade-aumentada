@@ -53,6 +53,9 @@
         ar-placement="floor"
         ar-scale="fixed"
         camera-controls
+        min-camera-orbit="auto auto 0.5m"
+        max-camera-orbit="auto auto 300m"
+        min-field-of-view="10deg"
         touch-action="pan-y"
         shadow-intensity="1"
         environment-image="neutral"
@@ -60,6 +63,11 @@
         loading="eager">
         <button slot="ar-button" class="arbtn" type="button">Ver em realidade aumentada</button>
       </model-viewer>
+    </div>
+    <div class="row">
+      <button id="zoomIn" type="button">Aproximar +</button>
+      <button id="zoomOut" type="button">Afastar −</button>
+      <button id="zoomReset" type="button">Ver tudo</button>
     </div>
     <div class="status" id="modelStatus" role="status" aria-live="polite">Carregando o arquivo modelo.glb...</div>
     <p class="viewer-note">No celular, toque em “Ver em realidade aumentada”. No Android, o aparelho poderá abrir o Google Scene Viewer; no iPhone, o Quick Look.</p>
@@ -104,6 +112,14 @@
     status.textContent = "Não foi possível carregar modelo.glb. Confira se o arquivo está na mesma pasta de index.html e se o nome está correto.";
     status.className = "status bad";
   });
+
+  function zoom(f){
+    const o = model.getCameraOrbit();
+    model.cameraOrbit = `${o.theta}rad ${o.phi}rad ${Math.max(0.5, o.radius * f)}m`;
+  }
+  $("zoomIn").addEventListener("click", () => zoom(0.6));
+  $("zoomOut").addEventListener("click", () => zoom(1.6));
+  $("zoomReset").addEventListener("click", () => { model.cameraOrbit = "auto auto auto"; model.jumpCameraToGoal(); });
 
   // O parâmetro #ar mantém a mesma página, mas abre diretamente a área do modelo.
   if (location.hash === "#ar") {
