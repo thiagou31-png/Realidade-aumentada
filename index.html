@@ -20,7 +20,7 @@
     button{border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--fg);padding:11px 15px;font:600 14px system-ui;cursor:pointer}
     button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     button:disabled{opacity:.5;cursor:not-allowed}
-    input[type=url]{width:100%;padding:11px;border:1px solid var(--line);border-radius:7px;font:14px system-ui}
+    input[type=url],input[type=text],input[type=number],select.list{width:100%;padding:11px;border:1px solid var(--line);border-radius:7px;font:14px system-ui}
     label{display:grid;gap:6px;color:var(--muted);font-size:13px}
     .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
     .status{min-height:22px;font-size:14px;color:var(--muted)}
@@ -31,6 +31,7 @@
     .url{overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;background:#f4f6f6;padding:10px;border-radius:6px}
     .arbtn{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);white-space:nowrap;background:var(--accent);color:#fff;border:0}
     .viewer-note{font-size:13px;color:var(--muted)}
+    .result{font:13px/1.6 ui-monospace,monospace;background:#f4f6f6;padding:10px;border-radius:6px}
     [hidden]{display:none!important}
     @media(max-width:620px){body{padding:16px 12px 32px}.card{padding:14px}.qrrow{grid-template-columns:1fr}#qr{width:100%;max-width:260px}.arbtn{font-size:13px;padding:10px 12px}}
   </style>
@@ -78,8 +79,30 @@
       <button id="zoomReset" type="button">Ver tudo</button>
     </div>
     <div class="viewer-note" id="sizeInfo"></div>
-    <div class="status" id="modelStatus" role="status" aria-live="polite">Carregando o arquivo modelo.glb...</div>
+    <div class="status" id="modelStatus" role="status" aria-live="polite">Carregando o modelo...</div>
     <p class="viewer-note">No celular, toque em “Ver em realidade aumentada”. No Android, o aparelho poderá abrir o Google Scene Viewer; no iPhone, o Quick Look.</p>
+  </section>
+
+  <section class="card" id="calCard">
+    <h2>Calibrar escala pela caixa de tomada 4x2</h2>
+    <p class="muted">Escolha na lista o objeto que é a caixa 4x2. A página mede esse objeto no arquivo original (<b>modelo.glb</b>), calcula o fator para ele ter o tamanho real e gera o <b>modelo-real.glb</b>.</p>
+    <div class="row">
+      <label style="flex:1;min-width:200px">Filtrar por nome
+        <input id="calFilter" type="text" value="caixa|4x2|tomada|box" placeholder="ex.: caixa|4x2">
+      </label>
+      <label style="width:190px">Maior lado real (cm)
+        <input id="calReal" type="number" step="0.01" value="10.16">
+      </label>
+    </div>
+    <select id="calList" class="list" size="8" aria-label="Objetos do modelo"></select>
+    <div class="result" id="calResult">Selecione o objeto na lista.</div>
+    <div class="row">
+      <button class="primary" id="calApply" type="button" disabled>Aplicar prévia</button>
+      <button id="calDownload" type="button" disabled>Baixar modelo-real.glb</button>
+      <button id="calReset" type="button">Remover prévia</button>
+    </div>
+    <p class="note">A caixa 4x2 mede 4 × 2 polegadas: o maior lado é 10,16 cm. Depois de baixar, coloque o <b>modelo-real.glb</b> na mesma pasta do index.html no GitHub. A página passa a usá-lo automaticamente em todos os aparelhos, inclusive no Android (Scene Viewer).</p>
+    <div class="status" id="calStatus" role="status" aria-live="polite"></div>
   </section>
 
   <section class="card" id="qrCard">
@@ -112,33 +135,191 @@
   const $ = id => document.getElementById(id);
   const model = $("model");
   const status = $("modelStatus");
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const fmt = v => v >= 1 ? v.toFixed(2).replace(".", ",") + " m" : (v * 100).toFixed(1).replace(".", ",") + " cm";
+
+  // ---------- leitura do GLB (medidas reais em metros) ----------
+  function readGlb(buf) {
+    const dv = new DataView(buf);
+    if (dv.getUint32(0, true) !== 0x46546C67) throw new Error("Arquivo não é um GLB válido.");
+    const jl = dv.getUint32(12, true);
+    const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl)));
+    return { json, jl };
+  }
+  function nodeMat(n) {
+    if (n.matrix) return n.matrix.slice();
+    const t = n.translation || [0,0,0], q = n.rotation || [0,0,0,1], s = n.scale || [1,1,1];
+    const [x,y,z,w] = q, xx=x*x, yy=y*y, zz=z*z, xy=x*y, xz=x*z, yz=y*z, wx=w*x, wy=w*y, wz=w*z;
+    return [(1-2*(yy+zz))*s[0],2*(xy+wz)*s[0],2*(xz-wy)*s[0],0,
+            2*(xy-wz)*s[1],(1-2*(xx+zz))*s[1],2*(yz+wx)*s[1],0,
+            2*(xz+wy)*s[2],2*(yz-wx)*s[2],(1-2*(xx+yy))*s[2],0,
+            t[0],t[1],t[2],1];
+  }
+  function mul(a, b) {
+    const o = new Array(16).fill(0);
+    for (let c=0;c<4;c++) for (let r=0;r<4;r++){ let s=0; for (let k=0;k<4;k++) s+=a[k*4+r]*b[c*4+k]; o[c*4+r]=s; }
+    return o;
+  }
+  const tp = (m,p) => [m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12], m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13], m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14]];
+  function analyze(json) {
+    const items = [], allLo = [Infinity,Infinity,Infinity], allHi = [-Infinity,-Infinity,-Infinity];
+    const I = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+    const walk = (i, pm) => {
+      const n = json.nodes[i], M = mul(pm, nodeMat(n));
+      if (n.mesh != null) {
+        const lo = [Infinity,Infinity,Infinity], hi = [-Infinity,-Infinity,-Infinity];
+        for (const pr of json.meshes[n.mesh].primitives) {
+          const a = json.accessors[pr.attributes.POSITION];
+          if (!a || !a.min || !a.max) continue;
+          for (let c=0;c<8;c++) {
+            const p = tp(M, [c&1?a.max[0]:a.min[0], c&2?a.max[1]:a.min[1], c&4?a.max[2]:a.min[2]]);
+            for (let k=0;k<3;k++){ lo[k]=Math.min(lo[k],p[k]); hi[k]=Math.max(hi[k],p[k]); }
+          }
+        }
+        if (isFinite(lo[0])) {
+          for (let k=0;k<3;k++){ allLo[k]=Math.min(allLo[k],lo[k]); allHi[k]=Math.max(allHi[k],hi[k]); }
+          items.push({ name: n.name || json.meshes[n.mesh].name || ("nó " + i), size: [hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2]] });
+        }
+      }
+      (n.children || []).forEach(c => walk(c, M));
+    };
+    const sc = json.scenes[json.scene || 0];
+    (sc.nodes || []).forEach(i => walk(i, I));
+    return { items, total: [0,1,2].map(k => allHi[k]-allLo[k]) };
+  }
+  function buildScaledGlb(buf, f) {
+    const { json, jl } = readGlb(buf);
+    const sc = json.scenes[json.scene || 0];
+    const idx = json.nodes.length;
+    json.nodes.push({ name: "escala_real", scale: [f,f,f], children: sc.nodes });
+    sc.nodes = [idx];
+    let js = new TextEncoder().encode(JSON.stringify(json));
+    const pad = (4 - js.length % 4) % 4;
+    const jp = new Uint8Array(js.length + pad); jp.set(js); jp.fill(0x20, js.length);
+    const rest = new Uint8Array(buf, 20 + jl);
+    const out = new Uint8Array(12 + 8 + jp.length + rest.length);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true);
+    dv.setUint32(12, jp.length, true); dv.setUint32(16, 0x4E4F534A, true);
+    out.set(jp, 20); out.set(rest, 20 + jp.length);
+    return out;
+  }
+
+  // ---------- estado de escala ----------
+  let BASE = [1,1,1];       // tamanho do arquivo carregado (m)
+  let CAL = 1;              // fator de calibração (só prévia)
+  let usingReal = false;    // true se modelo-real.glb está em uso
+  let origBuf = null, origInfo = null, picked = null;
+
+  function applyScale(r, save) {
+    const f = r * CAL;
+    model.scale = `${f} ${f} ${f}`;
+    const names = {"1":"1:1", "0.5":"1:2", "0.02":"1:50", "0.01":"1:100"};
+    $("sizeInfo").textContent = `Escala ${names[String(r)] || r}${CAL !== 1 ? " (calibrada, fator " + CAL.toFixed(4).replace(".", ",") + ")" : ""}: ${BASE.map(v => fmt(v * f)).join(" × ")} (X × Y × Z).` + (usingReal ? " Usando modelo-real.glb." : "");
+    if (model.updateFraming) model.updateFraming();
+    if (save) { try { localStorage.setItem("escala", String(r)); } catch (e) {} }
+  }
+  $("scaleSel").addEventListener("change", e => applyScale(parseFloat(e.target.value), true));
 
   model.addEventListener("load", () => {
     status.textContent = "Modelo carregado. Você já pode girar e aproximar a visualização.";
     status.className = "status ok";
   });
   model.addEventListener("error", () => {
-    status.textContent = "Não foi possível carregar modelo.glb. Confira se o arquivo está na mesma pasta de index.html e se o nome está correto.";
+    status.textContent = "Não foi possível carregar o modelo. Confira se modelo.glb está na mesma pasta de index.html.";
     status.className = "status bad";
   });
 
-  const BASE = [20.606, 5.484, 57.713]; // dimensões originais do GLB, em metros
-  const fmt = v => v >= 1 ? v.toFixed(2).replace(".", ",") + " m" : (v * 100).toFixed(1).replace(".", ",") + " cm";
-  function applyScale(f, save) {
-    model.scale = `${f} ${f} ${f}`;
-    const names = {"1":"1:1", "0.5":"1:2", "0.02":"1:50", "0.01":"1:100"};
-    $("sizeInfo").textContent = `Escala ${names[String(f)] || f}: ${BASE.map(v => fmt(v * f)).join(" × ")} (X × Y × Z). Vale também para a realidade aumentada.`;
-    if (model.updateFraming) model.updateFraming();
-    if (save) { try { localStorage.setItem("escala", String(f)); } catch (e) {} }
+  async function fetchBuf(url) {
+    const r = await fetch(url, { cache: "no-cache" });
+    if (!r.ok) throw new Error(url + " não encontrado");
+    return r.arrayBuffer();
   }
-  $("scaleSel").addEventListener("change", e => applyScale(parseFloat(e.target.value), true));
-  (() => {
-    let f = 1;
-    try { const v = localStorage.getItem("escala"); if (v && ["1","0.5","0.02","0.01"].includes(v)) f = parseFloat(v); } catch (e) {}
-    $("scaleSel").value = String(f);
-    applyScale(f, false);
-  })();
 
+  async function init() {
+    // usa modelo-real.glb se existir
+    try {
+      const rb = await fetchBuf("./modelo-real.glb");
+      readGlb(rb);
+      usingReal = true;
+      model.src = "./modelo-real.glb";
+      BASE = analyze(readGlb(rb).json).total;
+    } catch (e) {}
+    // arquivo original para calibração
+    try {
+      origBuf = await fetchBuf("./modelo.glb");
+      origInfo = analyze(readGlb(origBuf).json);
+      if (!usingReal) BASE = origInfo.total;
+      buildList();
+    } catch (e) {
+      $("calResult").textContent = "Não foi possível ler modelo.glb para calibrar (" + e.message + ").";
+    }
+    let r = 1;
+    if (isAndroid && usingReal) { $("scaleSel").disabled = true; }
+    else { try { const v = localStorage.getItem("escala"); if (v && ["1","0.5","0.02","0.01"].includes(v)) r = parseFloat(v); } catch (e) {} }
+    $("scaleSel").value = String(r);
+    applyScale(r, false);
+    if (usingReal) $("calStatus").textContent = "modelo-real.glb já está em uso. A calibração abaixo sempre parte do modelo.glb original.";
+  }
+
+  // ---------- calibração ----------
+  function buildList() {
+    if (!origInfo) return;
+    let re = null;
+    try { re = new RegExp($("calFilter").value.trim(), "i"); } catch (e) {}
+    const hasFilter = $("calFilter").value.trim() !== "";
+    let list = origInfo.items.map((it, i) => ({ ...it, i, mx: Math.max(...it.size) }));
+    const matched = re && hasFilter ? list.filter(it => re.test(it.name)) : list;
+    list = (matched.length ? matched : list).sort((a, b) => a.mx - b.mx).slice(0, 300);
+    const sel = $("calList"); sel.innerHTML = "";
+    for (const it of list) {
+      const o = document.createElement("option");
+      o.value = it.i;
+      o.textContent = `${it.name} — ${it.size.map(fmt).join(" × ")}`;
+      sel.appendChild(o);
+    }
+    if (!matched.length && hasFilter) $("calResult").textContent = "Nenhum nome bate com o filtro; mostrando todos, do menor para o maior. A caixa 4x2 deve estar entre os primeiros.";
+  }
+  $("calFilter").addEventListener("input", buildList);
+  function updateCalc() {
+    if (!picked) return;
+    const real = parseFloat($("calReal").value) / 100;
+    if (!(real > 0)) return;
+    const f = real / picked.mx;
+    picked.f = f;
+    $("calResult").innerHTML = `Objeto: <b>${picked.name}</b><br>Maior lado no arquivo: ${fmt(picked.mx)}<br>Tamanho real: ${fmt(real)}<br>Fator de escala: <b>${f.toFixed(6).replace(".", ",")}</b><br>Modelo inteiro depois: ${origInfo.total.map(v => fmt(v * f)).join(" × ")}`;
+    $("calApply").disabled = false; $("calDownload").disabled = false;
+  }
+  $("calList").addEventListener("change", e => {
+    const it = origInfo.items[parseInt(e.target.value, 10)];
+    picked = { name: it.name, mx: Math.max(...it.size) };
+    updateCalc();
+  });
+  $("calReal").addEventListener("input", updateCalc);
+  $("calApply").addEventListener("click", () => {
+    if (!picked) return;
+    if (usingReal) { $("calStatus").textContent = "modelo-real.glb está em uso; apague-o do repositório para ver prévias."; $("calStatus").className = "status bad"; return; }
+    CAL = picked.f;
+    applyScale(parseFloat($("scaleSel").value), false);
+    $("calStatus").textContent = "Prévia aplicada na visualização e no AR (WebXR/iPhone). Para valer no Android, baixe e publique o modelo-real.glb.";
+    $("calStatus").className = "status ok";
+  });
+  $("calReset").addEventListener("click", () => { CAL = 1; applyScale(parseFloat($("scaleSel").value), false); $("calStatus").textContent = "Prévia removida."; $("calStatus").className = "status"; });
+  $("calDownload").addEventListener("click", () => {
+    try {
+      const out = buildScaledGlb(origBuf, picked.f);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([out], { type: "model/gltf-binary" }));
+      a.download = "modelo-real.glb"; a.click();
+      $("calStatus").textContent = "modelo-real.glb gerado. Envie para a mesma pasta do index.html no GitHub.";
+      $("calStatus").className = "status ok";
+    } catch (e) {
+      $("calStatus").textContent = "Erro ao gerar o arquivo: " + e.message;
+      $("calStatus").className = "status bad";
+    }
+  });
+
+  // ---------- zoom ----------
   function zoom(f){
     const o = model.getCameraOrbit();
     model.cameraOrbit = `${o.theta}rad ${o.phi}rad ${Math.max(0.5, o.radius * f)}m`;
@@ -147,9 +328,10 @@
   $("zoomOut").addEventListener("click", () => zoom(1.6));
   $("zoomReset").addEventListener("click", () => { model.cameraOrbit = "auto auto auto"; model.jumpCameraToGoal(); });
 
-  // O parâmetro #ar mantém a mesma página, mas abre diretamente a área do modelo.
+  // #ar: página limpa para quem abre pelo QR Code
   if (location.hash === "#ar") {
     $("qrCard").hidden = true;
+    $("calCard").hidden = true;
     $("pageTitle").textContent = "Modelo em Realidade Aumentada";
   }
 
@@ -205,6 +387,8 @@
       $("qrStatus").className = "status bad";
     }
   });
+
+  init();
 })();
 </script>
 </body>
