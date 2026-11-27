@@ -380,6 +380,9 @@
     status.textContent = "Modelo carregado. Você já pode girar e aproximar a visualização.";
     status.className = "status ok";
     if (CUR) applyScale(curR(), false);
+    // reenquadra a câmera: ao trocar de projeto o novo modelo pode ficar fora de vista
+    model.cameraTarget = "auto auto auto"; model.cameraOrbit = "auto auto auto"; model.fieldOfView = "auto";
+    model.jumpCameraToGoal();
     setTimeout(() => {
       if (!model.canActivateAR) {
         status.textContent = "Este navegador ou aparelho não oferece AR. No Android use o Chrome atualizado, com “Serviços do Google Play para RA”; no iPhone, o Safari.";
@@ -387,8 +390,13 @@
       }
     }, 1200);
   });
-  model.addEventListener("error", () => {
-    status.textContent = "Não foi possível carregar o modelo. Confira se o arquivo do projeto está na mesma pasta de index.html.";
+  model.addEventListener("progress", e => {
+    const pr = e.detail && e.detail.totalProgress;
+    if (pr < 1) { status.textContent = "Carregando " + (cur ? cur.arquivo : "o modelo") + "… " + Math.round(pr * 100) + "%"; status.className = "status"; }
+  });
+  model.addEventListener("error", e => {
+    const d = e.detail && ((e.detail.sourceError && e.detail.sourceError.message) || e.detail.type) || "";
+    status.textContent = "Não foi possível carregar " + (cur ? cur.arquivo : "o modelo") + (d ? " (" + d + ")" : "") + ". Confira o nome do arquivo na pasta do GitHub (maiúsculas contam) e se ele é um .glb válido.";
     status.className = "status bad";
   });
   model.addEventListener("ar-status", e => {
@@ -400,7 +408,7 @@
 
   async function fetchBuf(url) {
     const r = await fetch(url, { cache: "no-cache" });
-    if (!r.ok) throw new Error(url + " não encontrado");
+    if (!r.ok) throw new Error("erro " + r.status + " ao buscar " + url);
     return r.arrayBuffer();
   }
 
@@ -476,6 +484,10 @@
     } catch (e) {
       if (tok !== loadTok) return;
       $("calResult").textContent = "Não foi possível ler " + p.arquivo + " para calibrar (" + e.message + ").";
+      if (!usingReal) {
+        status.textContent = "Não foi possível abrir " + p.arquivo + " (" + e.message + "). Confira o nome do arquivo no GitHub (maiúsculas contam).";
+        status.className = "status bad";
+      }
     }
     CUR = baseInfo;
     applyScale(curR(), false);
