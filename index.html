@@ -59,6 +59,7 @@
         <select id="projSel" style="padding:10px;border:1px solid var(--line);border-radius:7px;font:600 14px system-ui;background:#fff"></select>
       </label>
     </div>
+    <div class="status" id="projStatus" role="status"></div>
     <div style="position:relative">
       <model-viewer id="model"
         alt="Modelo 3D do projeto"
@@ -406,15 +407,35 @@
   const AR_MODE = /^#ar(=|$)/.test(location.hash);
   const realName = f => f.replace(/\.glb$/i, "-real.glb");
 
+  const slug = s => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+
   async function loadProjects() {
-    try {
-      const r = await fetch("./projetos.json", { cache: "no-cache" });
-      if (!r.ok) throw new Error("sem projetos.json");
-      const list = await r.json();
-      const ok = Array.isArray(list) ? list.filter(p => p && /^[\w-]+$/.test(p.id) && typeof p.arquivo === "string" && /\.glb$/i.test(p.arquivo)) : [];
-      if (ok.length) return ok.map(p => ({ id: p.id, nome: p.nome || p.id, arquivo: p.arquivo }));
-    } catch (e) {}
-    return [{ id: "modelo", nome: "Modelo", arquivo: "modelo.glb" }];
+    const fallback = [{ id: "modelo", nome: "Modelo", arquivo: "modelo.glb" }];
+    let r = null, lastErr = "";
+    for (const nome of ["projetos.json", "projects.json"]) {
+      try {
+        const x = await fetch("./" + nome + "?v=" + Date.now(), { cache: "no-store" });
+        if (x.ok) { r = x; break; }
+        lastErr = "erro " + x.status;
+      } catch (e) { lastErr = e.message; }
+    }
+    if (!r) return { list: fallback, warn: "projetos.json não foi encontrado na mesma pasta do index.html (" + lastErr + "). Mostrando só modelo.glb." };
+    let data;
+    try { data = await r.json(); }
+    catch (e) { return { list: fallback, warn: "projetos.json tem erro de formato (" + e.message + "). Confira vírgulas e aspas. Mostrando só modelo.glb." }; }
+    if (!Array.isArray(data)) data = data && Array.isArray(data.projetos) ? data.projetos : [];
+    const list = [], bad = [], seen = new Set();
+    data.forEach((p, i) => {
+      const arq = p && typeof p.arquivo === "string" ? p.arquivo.trim() : "";
+      if (!/\.glb$/i.test(arq)) { bad.push("item " + (i + 1) + ": “arquivo” deve terminar em .glb"); return; }
+      const base = arq.replace(/\.glb$/i, "");
+      let id = slug(p.id || p.nome || base) || "projeto" + (i + 1);
+      while (seen.has(id)) id += "-" + (i + 1);
+      seen.add(id);
+      list.push({ id, nome: p.nome || p.id || base, arquivo: arq });
+    });
+    if (!list.length) return { list: fallback, warn: "projetos.json não tem nenhum projeto válido (" + bad.join("; ") + "). Mostrando só modelo.glb." };
+    return { list, warn: bad.length ? "Ignorado em projetos.json: " + bad.join("; ") + "." : "" };
   }
 
   async function loadProject(p) {
@@ -462,12 +483,13 @@
   }
 
   async function init() {
-    PROJ = await loadProjects();
+    const lp = await loadProjects();
+    PROJ = lp.list;
     const sel = $("projSel");
     PROJ.forEach(p => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.nome; sel.appendChild(o); });
     let first = PROJ[0];
     const m = location.hash.match(/^#ar=([\w-]+)$/);
-    if (AR_MODE) { if (m) first = PROJ.find(p => p.id === m[1]) || first; }
+    if (AR_MODE) { if (m) first = PROJ.find(p => p.id === m[1].toLowerCase()) || first; }
     else { try { first = PROJ.find(p => p.id === localStorage.getItem("projeto")) || first; } catch (e) {} }
     sel.value = first.id;
     $("projRow").hidden = AR_MODE || PROJ.length < 2;
@@ -481,6 +503,11 @@
     if (!AR_MODE) { try { const v = parseFloat(localStorage.getItem("escala")); if (v > 0 && v <= 100) r = v; } catch (e) {} }
     setScale(r, false);
     await loadProject(first);
+    if (!AR_MODE) {
+      const ps = $("projStatus");
+      ps.textContent = lp.warn || (PROJ.length + (PROJ.length === 1 ? " projeto" : " projetos") + " em projetos.json: " + PROJ.map(p => p.nome).join(", ") + ".");
+      ps.className = lp.warn ? "status bad" : "status";
+    }
   }
 
   // ---------- calibração ----------
