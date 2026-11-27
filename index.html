@@ -82,6 +82,12 @@
     </div>
 
     <label class="chk"><input type="checkbox" id="arScaleChk" checked> Permitir mudar a escala dentro do AR (pinça com dois dedos)</label>
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg)">Modo de AR
+      <select id="arModeSel" style="padding:10px;border:1px solid var(--line);border-radius:7px;font:600 14px system-ui;background:#fff">
+        <option value="auto">Automático (navegador)</option>
+        <option value="sv">Scene Viewer do Google</option>
+      </select>
+    </label>
 
     <div class="row">
       <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg)">Escala
@@ -376,6 +382,17 @@
   arChk.addEventListener("change", setArScale);
   setArScale();
 
+  // modo de AR: o automático tenta o navegador (WebXR) primeiro; "sv" abre direto o Scene Viewer do Google
+  const arModeSel = $("arModeSel");
+  const MODES = { auto: "webxr scene-viewer quick-look", sv: "scene-viewer webxr quick-look" };
+  try { const v = localStorage.getItem("arModo"); if (MODES[v]) arModeSel.value = v; } catch (e) {}
+  const setArMode = () => {
+    model.setAttribute("ar-modes", MODES[arModeSel.value]);
+    try { localStorage.setItem("arModo", arModeSel.value); } catch (e) {}
+  };
+  arModeSel.addEventListener("change", setArMode);
+  setArMode();
+
   model.addEventListener("load", () => {
     status.textContent = "Modelo carregado. Você já pode girar e aproximar a visualização.";
     status.className = "status ok";
@@ -400,10 +417,15 @@
     status.className = "status bad";
   });
   model.addEventListener("ar-status", e => {
-    if (e.detail && e.detail.status === "failed") {
-      status.textContent = "Não foi possível iniciar o AR. Confira a permissão da câmera e se os Serviços do Google Play para RA estão instalados.";
-      status.className = "status bad";
+    if (!(e.detail && e.detail.status === "failed")) return;
+    const esc = curR() !== 1 ? " A escala está em " + scaleName(curR()) + "; volte para 1:1 para conferir na obra." : "";
+    if (arModeSel.value !== "sv") {
+      arModeSel.value = "sv"; setArMode();
+      status.textContent = "O AR pelo navegador não iniciou. Toque de novo em “Ver em realidade aumentada”: agora ele abre pelo Scene Viewer do Google." + esc;
+    } else {
+      status.textContent = "Não foi possível iniciar o AR. Confira a permissão da câmera para o site e se “Serviços do Google Play para RA” está instalado e atualizado na Play Store. Abra o link no Chrome, não dentro de outro aplicativo." + esc;
     }
+    status.className = "status bad";
   });
 
   async function fetchBuf(url) {
