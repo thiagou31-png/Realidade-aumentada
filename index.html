@@ -37,6 +37,10 @@
     ol.steps{margin:0;padding-left:20px;display:grid;gap:5px}
     .hs{position:relative;width:14px;height:14px;padding:0;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 0 0 1px var(--accent);pointer-events:none}
     .hs span{position:absolute;left:18px;top:-3px;white-space:nowrap;background:#fff;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:1px 6px;font:600 11px system-ui}
+    .qrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+    .qrgrid:empty{display:none}
+    .qritem{display:grid;gap:10px;border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0;align-content:start}
+    .qritem canvas{width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff}
     [hidden]{display:none!important}
     @media(max-width:620px){body{padding:16px 12px 32px}.card{padding:14px}.qrrow{grid-template-columns:1fr}#qr{width:100%;max-width:260px}.arbtn{font-size:13px;padding:10px 12px}}
   </style>
@@ -50,9 +54,13 @@
 
   <section class="card" id="modelCard">
     <h2>Modelo 3D</h2>
+    <div class="row" id="projRow">
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg)">Projeto
+        <select id="projSel" style="padding:10px;border:1px solid var(--line);border-radius:7px;font:600 14px system-ui;background:#fff"></select>
+      </label>
+    </div>
     <div style="position:relative">
       <model-viewer id="model"
-        src="./modelo.glb"
         alt="Modelo 3D do projeto"
         ar
         ar-modes="webxr scene-viewer quick-look"
@@ -112,7 +120,7 @@
 
   <section class="card" id="calCard">
     <h2>Calibrar escala e origem pela caixa de tomada 4x2</h2>
-    <p class="muted">Escolha na lista o objeto que é a caixa 4x2. A página mede esse objeto no arquivo original (<b>modelo.glb</b>), calcula o fator para ele ter o tamanho real e gera o <b>modelo-real.glb</b>.</p>
+    <p class="muted">Escolha na lista o objeto que é a caixa 4x2. A página mede esse objeto no arquivo original do projeto escolhido (<b id="origName">modelo.glb</b>), calcula o fator para ele ter o tamanho real e gera a versão <b>-real.glb</b> desse projeto.</p>
     <div class="row">
       <label style="flex:1;min-width:200px">Filtrar por nome
         <input id="calFilter" type="text" value="caixa|4x2|tomada|box" placeholder="ex.: caixa|4x2">
@@ -127,35 +135,25 @@
     <label class="chk"><input type="checkbox" id="optMarker" checked> Incluir eixos X/Y/Z de 50 cm na origem, para conferir o alinhamento</label>
     <div class="row">
       <button class="primary" id="calApply" type="button" disabled>Aplicar prévia</button>
-      <button id="calDownload" type="button" disabled>Baixar modelo-real.glb</button>
+      <button id="calDownload" type="button" disabled>Baixar -real.glb</button>
       <button id="calNone" type="button" disabled>Sem calibrar (fator 1)</button>
       <button id="calReset" type="button">Remover prévia</button>
     </div>
-    <p class="note">“Alinhar pela origem” acrescenta pontos invisíveis no arquivo para o centro da base do modelo coincidir com o 0,0,0. Sem isso, o AR centraliza o modelo pela caixa que o envolve e o 0,0,0 fica fora do ponto tocado. Use “Sem calibrar” se o modelo já está em metros reais. Depois de baixar, coloque o <b>modelo-real.glb</b> na mesma pasta do index.html no GitHub: a página passa a usá-lo automaticamente, inclusive no Scene Viewer do Android. A prévia funciona na página e no AR via WebXR/iPhone, mas não no Scene Viewer.</p>
+    <p class="note">“Alinhar pela origem” acrescenta pontos invisíveis no arquivo para o centro da base do modelo coincidir com o 0,0,0. Sem isso, o AR centraliza o modelo pela caixa que o envolve e o 0,0,0 fica fora do ponto tocado. Use “Sem calibrar” se o modelo já está em metros reais. Depois de baixar, coloque o arquivo <b>-real.glb</b> na mesma pasta do index.html no GitHub: a página passa a usá-lo automaticamente, inclusive no Scene Viewer do Android. A prévia funciona na página e no AR via WebXR/iPhone, mas não no Scene Viewer.</p>
     <div class="status" id="calStatus" role="status" aria-live="polite"></div>
   </section>
 
   <section class="card" id="qrCard">
-    <h2>Gerar QR Code para compartilhar</h2>
-    <p class="muted">Depois de publicar esta pasta no GitHub Pages, cole aqui o endereço do site. O QR Code abrirá diretamente a visualização do modelo.</p>
+    <h2>Gerar um QR Code para cada projeto</h2>
+    <p class="muted">Depois de publicar esta pasta no GitHub Pages, cole aqui o endereço do site. Cada projeto da lista ganha o seu QR Code, que abre direto naquele projeto.</p>
     <label>Endereço publicado no GitHub Pages
       <input id="siteUrl" type="url" placeholder="https://seu-usuario.github.io/nome-do-repositorio/">
     </label>
     <div class="row">
-      <button class="primary" id="makeQr" type="button">Gerar QR Code</button>
-      <button id="copyUrl" type="button">Copiar endereço de acesso</button>
+      <button class="primary" id="makeQr" type="button">Gerar QR Codes</button>
     </div>
-    <div class="qrrow" id="qrResult" hidden>
-      <div id="qr" aria-label="QR Code"></div>
-      <div style="display:grid;gap:10px;min-width:0">
-        <strong>QR Code pronto</strong>
-        <div class="url" id="qrUrl"></div>
-        <div class="row">
-          <button id="downloadQr" type="button">Baixar QR Code PNG</button>
-        </div>
-        <p class="note">A câmera do celular abrirá esta página já na visualização do modelo. Depois, basta tocar no botão de realidade aumentada.</p>
-      </div>
-    </div>
+    <div class="qrgrid" id="qrList"></div>
+    <p class="note">O nome do projeto vem escrito embaixo de cada QR Code no PNG, para você identificar na impressão. Os projetos vêm do arquivo <b>projetos.json</b>.</p>
     <div class="status" id="qrStatus" role="status" aria-live="polite"></div>
   </section>
 </main>
@@ -331,6 +329,7 @@
   let calNote = "";         // texto extra quando há prévia
   let usingReal = false;    // true se modelo-real.glb está em uso
   let baseSrc = "./modelo.glb", baseInfo = null;
+  let PROJ = [], cur = null, loadTok = 0;
   let origBuf = null, origInfo = null, picked = null, previewUrl = null;
   const PRESETS = ["2", "1", "0.5", "0.1", "0.02", "0.01"];
   const curR = () => { const v = parseFloat($("scaleNum").value); return v > 0 ? v : 1; };
@@ -346,7 +345,7 @@
   function applyScale(r, save) {
     model.scale = `${r} ${r} ${r}`;
     if (CUR) {
-      $("sizeInfo").textContent = `Escala ${scaleName(r)}${calNote}: ${CUR.total.map(v => fmt(v * r)).join(" × ")} (X × Y × Z).` + (usingReal && !previewUrl ? " Usando modelo-real.glb." : "");
+      $("sizeInfo").textContent = `Escala ${scaleName(r)}${calNote}: ${CUR.total.map(v => fmt(v * r)).join(" × ")} (X × Y × Z).` + (usingReal && !previewUrl && cur ? " Usando " + realName(cur.arquivo) + "." : "");
       $("boundsInfo").textContent = boundsText(CUR, r);
     }
     if (model.updateFraming) model.updateFraming();
@@ -388,7 +387,7 @@
     }, 1200);
   });
   model.addEventListener("error", () => {
-    status.textContent = "Não foi possível carregar o modelo. Confira se modelo.glb está na mesma pasta de index.html.";
+    status.textContent = "Não foi possível carregar o modelo. Confira se o arquivo do projeto está na mesma pasta de index.html.";
     status.className = "status bad";
   });
   model.addEventListener("ar-status", e => {
@@ -404,32 +403,84 @@
     return r.arrayBuffer();
   }
 
-  async function init() {
-    // usa modelo-real.glb se existir
+  const AR_MODE = /^#ar(=|$)/.test(location.hash);
+  const realName = f => f.replace(/\.glb$/i, "-real.glb");
+
+  async function loadProjects() {
     try {
-      const rb = await fetchBuf("./modelo-real.glb");
-      baseInfo = analyze(readGlb(rb).json);
-      usingReal = true;
-      baseSrc = "./modelo-real.glb";
-      model.src = baseSrc;
+      const r = await fetch("./projetos.json", { cache: "no-cache" });
+      if (!r.ok) throw new Error("sem projetos.json");
+      const list = await r.json();
+      const ok = Array.isArray(list) ? list.filter(p => p && /^[\w-]+$/.test(p.id) && typeof p.arquivo === "string" && /\.glb$/i.test(p.arquivo)) : [];
+      if (ok.length) return ok.map(p => ({ id: p.id, nome: p.nome || p.id, arquivo: p.arquivo }));
+    } catch (e) {}
+    return [{ id: "modelo", nome: "Modelo", arquivo: "modelo.glb" }];
+  }
+
+  async function loadProject(p) {
+    const tok = ++loadTok;
+    cur = p;
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+    usingReal = false; baseInfo = null; origBuf = null; origInfo = null; picked = null; calNote = ""; CUR = null;
+    $("calApply").disabled = true; $("calDownload").disabled = true; $("calNone").disabled = true;
+    $("calList").innerHTML = "";
+    $("calResult").textContent = "Selecione o objeto na lista.";
+    $("calStatus").textContent = ""; $("calStatus").className = "status";
+    $("origName").textContent = p.arquivo;
+    $("calDownload").textContent = "Baixar " + realName(p.arquivo);
+    $("sizeInfo").textContent = ""; $("boundsInfo").textContent = "";
+    status.textContent = "Carregando o modelo..."; status.className = "status";
+    document.title = p.nome + " | Realidade Aumentada";
+    if (AR_MODE) $("pageTitle").textContent = "Modelo em Realidade Aumentada" + (PROJ.length > 1 ? " — " + p.nome : "");
+    const src = "./" + p.arquivo.replace(/^\.\//, ""), realSrc = realName(src);
+    baseSrc = src;
+    // usa a versão -real.glb se existir
+    try {
+      const rb = await fetchBuf(realSrc);
+      const info = analyze(readGlb(rb).json);
+      if (tok !== loadTok) return;
+      baseInfo = info; usingReal = true; baseSrc = realSrc;
     } catch (e) { usingReal = false; }
+    if (tok !== loadTok) return;
+    model.src = baseSrc;
     // arquivo original para calibração
     try {
-      origBuf = await fetchBuf("./modelo.glb");
-      origInfo = analyze(readGlb(origBuf).json);
+      const ob = await fetchBuf(src);
+      const oi = analyze(readGlb(ob).json);
+      if (tok !== loadTok) return;
+      origBuf = ob; origInfo = oi;
       if (!usingReal) baseInfo = origInfo;
       buildList();
       $("calNone").disabled = false;
     } catch (e) {
-      $("calResult").textContent = "Não foi possível ler modelo.glb para calibrar (" + e.message + ").";
+      if (tok !== loadTok) return;
+      $("calResult").textContent = "Não foi possível ler " + p.arquivo + " para calibrar (" + e.message + ").";
     }
     CUR = baseInfo;
+    applyScale(curR(), false);
+    if (usingReal) $("calStatus").textContent = realName(p.arquivo) + " já está em uso. A calibração abaixo sempre parte de " + p.arquivo + ".";
+  }
+
+  async function init() {
+    PROJ = await loadProjects();
+    const sel = $("projSel");
+    PROJ.forEach(p => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.nome; sel.appendChild(o); });
+    let first = PROJ[0];
+    const m = location.hash.match(/^#ar=([\w-]+)$/);
+    if (AR_MODE) { if (m) first = PROJ.find(p => p.id === m[1]) || first; }
+    else { try { first = PROJ.find(p => p.id === localStorage.getItem("projeto")) || first; } catch (e) {} }
+    sel.value = first.id;
+    $("projRow").hidden = AR_MODE || PROJ.length < 2;
+    sel.addEventListener("change", () => {
+      const p = PROJ.find(x => x.id === sel.value);
+      if (!p) return;
+      try { localStorage.setItem("projeto", p.id); } catch (e) {}
+      loadProject(p);
+    });
     let r = 1;
-    if (location.hash !== "#ar") {
-      try { const v = parseFloat(localStorage.getItem("escala")); if (v > 0 && v <= 100) r = v; } catch (e) {}
-    }
+    if (!AR_MODE) { try { const v = parseFloat(localStorage.getItem("escala")); if (v > 0 && v <= 100) r = v; } catch (e) {} }
     setScale(r, false);
-    if (usingReal) $("calStatus").textContent = "modelo-real.glb já está em uso. A calibração abaixo sempre parte do modelo.glb original.";
+    await loadProject(first);
   }
 
   // ---------- calibração ----------
@@ -484,7 +535,7 @@
       calNote = ` (prévia, fator ${picked.f.toFixed(4).replace(".", ",")})`;
       model.src = previewUrl;
       applyScale(curR(), false);
-      $("calStatus").textContent = "Prévia aplicada na página e no AR (WebXR/iPhone). Para valer no Scene Viewer do Android, baixe e publique o modelo-real.glb.";
+      $("calStatus").textContent = "Prévia aplicada na página e no AR (WebXR/iPhone). Para valer no Scene Viewer do Android, baixe e publique o arquivo -real.glb.";
       $("calStatus").className = "status ok";
     } catch (e) {
       $("calStatus").textContent = "Erro ao gerar a prévia: " + e.message;
@@ -503,8 +554,8 @@
       const out = buildGlb(origBuf, picked.f, opts());
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([out], { type: "model/gltf-binary" }));
-      a.download = "modelo-real.glb"; a.click();
-      $("calStatus").textContent = "modelo-real.glb gerado. Envie para a mesma pasta do index.html no GitHub.";
+      a.download = realName(cur.arquivo); a.click();
+      $("calStatus").textContent = realName(cur.arquivo) + " gerado. Envie para a mesma pasta do index.html no GitHub.";
       $("calStatus").className = "status ok";
     } catch (e) {
       $("calStatus").textContent = "Erro ao gerar o arquivo: " + e.message;
@@ -521,63 +572,69 @@
   $("zoomOut").addEventListener("click", () => zoom(1.6));
   $("zoomReset").addEventListener("click", () => { model.cameraOrbit = "auto auto auto"; model.jumpCameraToGoal(); });
 
-  // #ar: página limpa para quem abre pelo QR Code
-  if (location.hash === "#ar") {
+  // #ar / #ar=id: página limpa para quem abre pelo QR Code
+  if (AR_MODE) {
     $("qrCard").hidden = true;
     $("calCard").hidden = true;
     $("boundsInfo").hidden = true;
-    $("pageTitle").textContent = "Modelo em Realidade Aumentada";
   }
 
-  function makeViewerUrl(raw) {
+  function makeViewerUrl(raw, id) {
     const u = new URL(raw);
     if (u.protocol !== "https:") throw new Error("Use o endereço HTTPS publicado pelo GitHub Pages.");
-    u.hash = "ar";
+    u.hash = "ar=" + id;
     return u.href;
+  }
+
+  function qrCanvas(url, label) {
+    const q = document.createElement("canvas");
+    new QRious({ element: q, value: url, size: 440, level: "H" });
+    const c = document.createElement("canvas");
+    c.width = 440; c.height = 496;
+    const g = c.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(q, 0, 0);
+    g.fillStyle = "#172027"; g.font = "600 26px system-ui,Arial,sans-serif";
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(label, 220, 468, 420);
+    return c;
   }
 
   $("makeQr").addEventListener("click", () => {
     try {
       const raw = $("siteUrl").value.trim();
       if (!raw) throw new Error("Cole primeiro o endereço publicado no GitHub Pages.");
-      const finalUrl = makeViewerUrl(raw);
-      $("qr").innerHTML = "";
-      const canvas = document.createElement("canvas");
-      $("qr").appendChild(canvas);
-      new QRious({element:canvas,value:finalUrl,size:440,level:"H"});
-      $("qrUrl").textContent = finalUrl;
-      $("qrResult").hidden = false;
-      $("qrStatus").textContent = "QR Code gerado com sucesso.";
+      const urls = PROJ.map(p => makeViewerUrl(raw, p.id));
+      const list = $("qrList"); list.innerHTML = "";
+      PROJ.forEach((p, i) => {
+        const url = urls[i];
+        const box = document.createElement("div"); box.className = "qritem";
+        const title = document.createElement("strong"); title.textContent = p.nome;
+        const cv = qrCanvas(url, p.nome); cv.setAttribute("aria-label", "QR Code do projeto " + p.nome);
+        const u = document.createElement("div"); u.className = "url"; u.textContent = url;
+        const row = document.createElement("div"); row.className = "row";
+        const bd = document.createElement("button"); bd.type = "button"; bd.textContent = "Baixar PNG";
+        bd.addEventListener("click", () => {
+          const a = document.createElement("a");
+          a.href = cv.toDataURL("image/png"); a.download = "qr-" + p.id + ".png"; a.click();
+        });
+        const bc = document.createElement("button"); bc.type = "button"; bc.textContent = "Copiar endereço";
+        bc.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(url);
+            $("qrStatus").textContent = "Endereço de " + p.nome + " copiado."; $("qrStatus").className = "status ok";
+          } catch (e) {
+            $("qrStatus").textContent = "Não foi possível copiar o endereço."; $("qrStatus").className = "status bad";
+          }
+        });
+        row.append(bd, bc);
+        box.append(title, cv, u, row);
+        list.appendChild(box);
+      });
+      $("qrStatus").textContent = PROJ.length + (PROJ.length === 1 ? " QR Code gerado." : " QR Codes gerados.");
       $("qrStatus").className = "status ok";
     } catch (e) {
-      $("qrStatus").textContent = e.message || "Não foi possível gerar o QR Code.";
-      $("qrStatus").className = "status bad";
-    }
-  });
-
-  $("downloadQr").addEventListener("click", () => {
-    const canvas = $("qr").querySelector("canvas");
-    if (!canvas) return;
-    const a = document.createElement("a");
-    a.href = canvas.toDataURL("image/png");
-    a.download = "qr-realidade-aumentada.png";
-    a.click();
-  });
-
-  $("copyUrl").addEventListener("click", async () => {
-    const raw = $("siteUrl").value.trim();
-    if (!raw) {
-      $("qrStatus").textContent = "Cole primeiro o endereço publicado no GitHub Pages.";
-      $("qrStatus").className = "status bad";
-      return;
-    }
-    try {
-      const finalUrl = makeViewerUrl(raw);
-      await navigator.clipboard.writeText(finalUrl);
-      $("qrStatus").textContent = "Endereço de acesso copiado.";
-      $("qrStatus").className = "status ok";
-    } catch (e) {
-      $("qrStatus").textContent = e.message || "Não foi possível copiar o endereço.";
+      $("qrStatus").textContent = e.message || "Não foi possível gerar os QR Codes.";
       $("qrStatus").className = "status bad";
     }
   });
