@@ -1,3 +1,6 @@
 [
-  { "id": "Larissa", "arquitetura": "Elétrico", "arquivo": "Larissa" }
+  { "1": "Larissa", "arquitetura": "Elétrico", "arquivo": "Larissa.glb" }
+]
+[
+  { "2": "Larissa", "arquitetura": "Elétrico", "arquivo": "modelo.glb" }
 ]
